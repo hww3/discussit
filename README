@@ -15,7 +15,9 @@ distribution.
 Also, be sure to read the file LICENSE, included with this module.
 
 [What's New]
-
+Version 0.96:
+	DiscussIt! works with Caudium 1.2, Roxen 2.2 and Pike 7.2.
+	
 Version 0.95:
 
 	DiscussIt! works with Caudium and Pike 7.0.
@@ -27,7 +29,7 @@ Version 0.9:
 
 [Requirements]
 
-   * Roxen 1.3 or higher.
+   * Caudium 1.0, Roxen 1.3 or higher.
    * RDBMS supported by Roxen (mySQL is known to work, others may also)
 
 [Getting DiscussIt!]

@@ -5,15 +5,20 @@
 // (c) copyright 1999 Bill Welliver
 //
 
-string cvs_version = "$Id: discussit.pike,v 1.5 2001-02-08 00:15:27 hww3 Exp $";
+string cvs_version = "$Id: discussit.pike,v 1.6 2002-02-10 19:00:59 hww3 Exp $";
 
 #include <module.h>
 #include <process.h>
 inherit "module";
 inherit "roxenlib";
 
+#if ROXEN_MAJOR_VERSION.ROXEN_MINOR_VERSION > 2.1
+#define SQLCONNECT(X) X=DBManager.get(dbserver,my_configuration())
+#else
 #define SQLCONNECT(X) X=id->conf->sql_connect(dbserver)
-#define ERROR(X) perror("DiscussIt!: " + X + "\n")
+#endif
+
+#define ERROR(X) werror("DiscussIt!: " + X + "\n")
 array register_module()
 {
   return ({ MODULE_PARSER,
@@ -51,15 +56,18 @@ string dbserver;
 
 void start()
 {
- dbserver=query("dbserver");
- 
+ if(catch(dbserver=query("dbserver"))) return;
  mixed err;
-
 // ERROR("Starting up!");
 
- err=catch(object s=Sql.sql(query("dbserver")));
+#if ROXEN_MAJOR_VERSION.ROXEN_MINOR_VERSION > 2.1
+ err=catch(object s=DBManager.get(dbserver,my_configuration()));
+#else
+ err=catch(object s=Sql.sql(dbserver));
+#endif
  if(err) { 
   ERROR("Unable to connect to db.");
+  werror("%O\n", err);
   return;
   }
 
@@ -111,7 +119,7 @@ string do_post(object id, mixed v){
   }
 
   if(!id->cookies->userid || id->cookies->userid=="")
-   return "<forumsgetauth>";
+   return "<forumsgetauth />";
 
   array u=s->query("SELECT * FROM users WHERE userid=" +
    id->cookies->userid);
@@ -188,7 +196,11 @@ if(id->variables->username && id->variables->password) {
   id->variables->username + "' AND password='" + id->variables->password +
   "'");
  if(sizeof(r)==1)
+#if ROXEN_MAJOR_VERSION.ROXEN_MINOR_VERSION > 1.3
+  retval+="<set scope=\"cookie\" variable=\"userid\" value=\"" + r[0]->userid + "\" />"
+#else
   retval+="<set_cookie name=userid value=\"" + r[0]->userid + "\">"
+#endif
    "<h3>Login Successful!</h3>\n"
    "<a href=\"" + id->not_query + "?" + id->query + "&" + time() +
    "\">Continue...</a>";
@@ -286,7 +298,7 @@ html_encode_string(row->subject) +
     retval+=" &nbsp; <a href=\"" + id->not_query + "?forum=" + args->forum
      + "&id=" + row->id + "&delete=1\">DELETE POST</a>\n";
    retval+="<subpost parent=\"" + row->id + "\""
-    " forum=" + args->forum + "></ul>\n";
+    " forum=" + args->forum + " /></ul>\n";
 
    }
 
@@ -449,7 +461,7 @@ row->id + " GROUP BY article_id");
      + "&id=" + row->id + "&delete=1\">DELETE POST</a>\n";
 
    retval+="<subpost parent=\"" + row->id + "\" "
-    " forum=" + forum + ">";
+    " forum=" + forum + " />";
    }
   
   if(sizeof(r)==0) retval+= "Sorry, DiscussIt! was unable to find any posts.";
@@ -512,7 +524,7 @@ row->id + " GROUP BY article_id");
 
   if(!args->nofollowups)
    retval+="<h4>Follow Up:</h4>\n<subpost forum=" + forum + " parent=" +
-    r[0]->id + " loud>";
+    r[0]->id + " loud />";
  }
  }
 return retval;
@@ -528,7 +540,7 @@ id->misc->forum_admin_user=1;
 
 if(id->variables->forum) {
 
- retval+="<forum id=" + id->variables->forum  + ">";
+ retval+="<forum id=" + id->variables->forum  + " />";
 
 }
 
