@@ -1,0 +1,113 @@
+[DiscussIt! version 0.9]
+
+DiscussIt! is a free module for the Roxen Web Server. It allows easy
+creation of discussion groups without the need to program custom CGI
+scripts.
+
+Please remember that this is a work in progress. Your comments and
+suggestions are appreciated. You can send your comments to me, the
+developer at hww3@riverweb.com.
+
+If you find this module useful, I'd greatly appreciate a postcard from you
+letting me know you're out there. My Address is included in the
+distribution.
+
+Also, be sure to read the file LICENSE, included with this module.
+
+[What's New]
+
+Version 0.9:
+
+	Initial release of module.
+
+[Requirements]
+
+   * Roxen 1.2 or higher.
+   * RDBMS supported by Roxen (mySQL, etc)
+
+[Getting DiscussIt!]
+
+   * Download the latest version of DiscussIt! with Documentation (v0.9)
+	from http://www.riverweb.com/modules/dist/
+
+[Installing DiscussIt!]
+
+Using DiscussIt! is simple! Just download the archive, then unpack it by
+using the following command:
+
+        tar -zxvf discussit-1.0.tar.gz
+
+You should get a directory called discussit-1.0. Inside that directory is
+a file called discussit.pike. Copy that file to your Roxen modules
+directory, under roxen/server/modules. Then you can use the Configuration
+Interface to add the DiscussIt! module.
+
+There are a few options you can change, but in most cases, you will only
+need to tell DiscussIt! about the database you want to use for storing the
+discussion groups. This database should already exist. DiscussIt! will
+create the tables it needs when it is loaded the first time.
+
+That's all there is to it! You can now start using the features of the
+DiscussIt! module.
+
+[Using DiscussIt!]
+
+There are 3 components of a working DiscussIt! application:
+
+   * The DiscussIt! Module (you've already installed it)
+   * An DiscussIt! administrator's page
+   * A DiscussIt! access page
+
+[The Administrator's Page]
+The administrator's page is where you can create and delete forums,
+delete posts, and do other administrative tasks. You can use any text or
+HTML editor you'd like to create this page. Since this page can be used
+for evil as well as good, you should make sure this page is protected by a
+password or some other security measure.
+
+On this page, you simply need to add the following tag:
+
+<forum_admin>
+
+And DiscussIt! will handle the rest.
+
+[The DiscussIt! Access Page]
+The DiscussIt! Access Page is simply an HTML file that includes the
+DiscussIt! access tag. The tag that handles all of the dirty work is:
+
+	<forum>
+
+Simply place this tag on the page you would like to access your forums
+from. DiscussIt! will handle the rest.
+
+The forum tag takes the following attributes:
+
+  forum=value		Display only forum value (the numeric forum id).
+  name=value		Forum's name (used when autocreating forums).
+  description=value	Forum's description (for autocreate).
+  noindex		Don't display a list of all available forums.
+  loud			Display a message indicating an empty forum.
+  no_html		Replaces all < and > with &lt; and &gt;.
+  nofollowups		Don't show followup discussion with posts.
+
+[Autocreate]
+If you have enabled the "autocreate" function in the module's
+configuration, DiscussIt! will try to create new forums when provided with
+a forum tag with a name attribute that doesn't already exist.
+
+[Posting Access]
+Access to adding new posts is controlled by the "users" table. In order to
+post, a user will be prompted for a username and password. This
+information will then be matched against data in the "users" table. To
+grant access to a user, simply add a record to this table with a password.
+The password is stored in clear text at this time.
+
+Example using SQL: 
+
+  INSERT INTO USERS VALUES(NULL, 'user','mypasswd','Joe User', 
+    'myself@me.com',NOW());
+
+[Acknowledgments]
+
+Bill Welliver <hww3@riverweb.com>
+5/4/99

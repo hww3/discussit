@@ -2,10 +2,10 @@
 // This is a Roxen module.
 //
 // Written by Bill Welliver, <hww3@riverweb.com>
-//
+// (c) copyright 1999 Bill Welliver
 //
 
-string cvs_version = "$Id: discussit.pike,v 1.1 1999-05-06 00:39:26 hww3 Exp $";
+string cvs_version = "$Id: discussit.pike,v 1.2 1999-05-07 01:39:50 hww3 Exp $";
 
 #include <module.h>
 #include <process.h>
@@ -21,7 +21,7 @@ array register_module()
             "Database driven discussion groups.<p>\n"
 	"Usage:<p>"
 	"&lt;forum&gt; "
-	"&lt;forumadmin&gt; "
+	"&lt;forum_admin&gt; "
 		, ({}), 1
             });
 }
@@ -240,8 +240,8 @@ string tag_forum_index(string tag_name, mapping args,
  foreach(d, mapping row){
   array p=s->query("SELECT COUNT(*) as posts FROM articles WHERE forum=" 
    + row->id);
-  int numposts=p[0]->posts;
-  int unreadposts=numposts;
+  int numposts=(int)p[0]->posts;
+  int unreadposts=(int)numposts;
   if(id->cookies->userid) {
    array p=s->query("SELECT *  FROM read_entries "
     "WHERE userid=" + id->cookies->userid + " AND forum_id=" + row->id + 
@@ -484,7 +484,8 @@ row->id + " GROUP BY article_id");
    id->variables->id);
 
   if(sizeof(r)==1){
-
+  if(args->no_html) r[0]->text=replace(r[0]->text, ({">","<"}),
+({"&gt;","&lt;"}));
   retval+="<b>Subject:</b> " + r[0]->subject + "<br>" 
     "<b>Posted on:</b> " + r[0]->time + " <b>by</b> " +r[0]->name +
     "<br>\n"
