@@ -5,7 +5,7 @@
 // (c) copyright 1999 Bill Welliver
 //
 
-string cvs_version = "$Id: discussit.pike,v 1.2 1999-05-07 01:39:50 hww3 Exp $";
+string cvs_version = "$Id: discussit.pike,v 1.3 1999-05-09 15:32:09 hww3 Exp $";
 
 #include <module.h>
 #include <process.h>
@@ -402,11 +402,23 @@ string tag_forum(string tag_name, mapping args,
      "<input type=hidden name=dopost value=\"1\">\n";
 
    if(id->variables->in_reply_to)
-    {
+    /*{
      retval+="<input type=hidden name=in_reply_to value=\""
        + id->variables->in_reply_to + "\">\n"
       "Subject: <input type=text name=subject value=\"Re: \"><br>";
-    }
+    }*/
+   {
+		   array r=s->query("SELECT subject from articles where id="+id->variables->in_reply_to);
+		   string subject = "Re: ";
+		   if(r && sizeof(r))
+				   	if(!search(r[0]->subject, "Re: "))
+							subject = r[0]->subject;
+		   			else
+							subject += r[0]->subject;
+		   retval+="<input type=hidden name=in_reply_to value=\""
+				   + id->variables->in_reply_to + "\">\n"
+				   "Subject: <input type=text name=subject value=\""+subject+"\"><br>";
+   }
    else
     retval+="Subject: <input type=text name=subject><br>";
 
