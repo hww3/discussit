@@ -1,4 +1,4 @@
-[DiscussIt! version 0.95]
+[DiscussIt! version 0.97]
 
 DiscussIt! is a free module for the Roxen Web Server. It allows easy
 creation of discussion groups without the need to program custom CGI
@@ -9,12 +9,18 @@ suggestions are appreciated. You can send your comments to me, the
 developer at hww3@riverweb.com.
 
 If you find this module useful, I'd greatly appreciate a postcard from you
-letting me know you're out there. My Address is included in the
-distribution.
-
-Also, be sure to read the file LICENSE, included with this module.
+letting me know you're out there. My Address is:
+  Bill Welliver
+  RR 1 Box 44
+  Wapwallopen, PA 18660
 
 [What's New]
+
+Version 0.97:	
+	DiscussIt! now quotes any input from the tag or user in order to 
+	  minimize security exposures.
+	New argument added to the forum tag: quiet.
+
 Version 0.96:
 	DiscussIt! works with Caudium 1.2, Roxen 2.2 and Pike 7.2.
 	
@@ -114,6 +120,8 @@ The forum tag takes the following attributes:
   description=value	Forum's description (for autocreate).
   noindex		Don't display a list of all available forums.
   loud			Display a message indicating an empty forum.
+  quiet			Do not display messages if there are no posts to 
+				be displayed
   no_html		Replaces all < and > with &lt; and &gt;.
   nofollowups		Don't show followup discussion with posts.
 
@@ -144,5 +152,8 @@ then set the userid cookie with the numeric userid of that user.
 
 [Acknowledgments]
 
+Thanks to Xavier Beaudouin <kiwi@oav.net> for his assistance in adding
+new features to DiscussIt!.
+
 Bill Welliver <hww3@riverweb.com>
-2/8/2001
+2/18/2002

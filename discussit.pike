@@ -5,7 +5,7 @@
 // (c) copyright 1999 Bill Welliver
 //
 
-string cvs_version = "$Id: discussit.pike,v 1.6 2002-02-10 19:00:59 hww3 Exp $";
+string cvs_version = "$Id: discussit.pike,v 1.7 2002-02-19 03:47:27 hww3 Exp $";
 
 #include <module.h>
 #include <process.h>
@@ -122,10 +122,10 @@ string do_post(object id, mixed v){
    return "<forumsgetauth />";
 
   array u=s->query("SELECT * FROM users WHERE userid=" +
-   id->cookies->userid);
+          s->quote(id->cookies->userid));
   if(sizeof(u)!=1)
    return "Unable to find your user id.";
-  array r=s->query("SELECT * FROM forum_names WHERE id=" + v->forum);
+  array r=s->query("SELECT * FROM forum_names WHERE id=" + s->quote(v->forum));
 
   s->query("INSERT INTO articles VALUES(NULL, " + r[0]->id + "," +
     (v->in_reply_to ||"0") + ",'" + s->quote(v->subject) + "'," +
@@ -193,8 +193,8 @@ string retval="";
 
 if(id->variables->username && id->variables->password) {
  array r=s->query("SELECT * FROM users WHERE username='" +
-  id->variables->username + "' AND password='" + id->variables->password +
-  "'");
+  s->quote(id->variables->username) + "' AND password='" + 
+  s->quote(id->variables->password) + "'");
  if(sizeof(r)==1)
 #if ROXEN_MAJOR_VERSION.ROXEN_MINOR_VERSION > 1.3
   retval+="<set scope=\"cookie\" variable=\"userid\" value=\"" + r[0]->userid + "\" />"
@@ -243,8 +243,8 @@ string tag_forum_index(string tag_name, mapping args,
   int unreadposts=(int)numposts;
   if(id->cookies->userid && id->cookies->userid!="") {
    array p=s->query("SELECT *  FROM read_entries "
-    "WHERE userid=" + id->cookies->userid + " AND forum_id=" + row->id + 
-    " GROUP BY article_id ");
+    "WHERE userid=" + s->quote(id->cookies->userid) + " AND forum_id=" +
+     row->id + " GROUP BY article_id ");
 
    if(sizeof(p)>0){
     int readposts=sizeof(p);
@@ -277,15 +277,15 @@ string tag_subpost(string tag_name, mapping args,
   array r=s->query("SELECT articles.*, DATE_FORMAT(" +
    "articles.stamp, "
    "'%e %M %Y') AS time, users.real_name AS name FROM articles "
-   ",users WHERE parent=" + args->parent + " AND users.userid=" + 
+   ",users WHERE parent=" + s->quote(args->parent) + " AND users.userid=" + 
    "articles.userid");
 
   foreach(r, mapping row){
    int unread=1;
    if(id->cookies->userid && id->cookies->userid!="") {
     array r=s->query("SELECT * FROM read_entries WHERE userid=" +
-id->cookies->userid + " AND article_id=" +
-row->id + " GROUP BY article_id");
+            s->quote(id->cookies->userid) + " AND article_id=" +
+            row->id + " GROUP BY article_id");
 // ERROR(sprintf("%O", r));
     if(sizeof(r)!=0) unread=0;
     }
@@ -329,7 +329,7 @@ string tag_forum(string tag_name, mapping args,
  if(id->variables->forum){
 
   array r=s->query("SELECT * FROM forum_names WHERE id=" +
-   id->variables->forum );
+   s->quote(id->variables->forum) );
 
   if(sizeof(r)==1) {
    name=r[0]->forum_name;
@@ -340,7 +340,7 @@ string tag_forum(string tag_name, mapping args,
  else if(args->name) {
   name=args->name;
   array r=s->query("SELECT * FROM forum_names WHERE forum_name='" +
-   args->name + "'");
+   s->quote(args->name) + "'");
   if(sizeof(r)==1) {
    name=r[0]->forum_name;
    forum=r[0]->id;
@@ -360,8 +360,9 @@ string tag_forum(string tag_name, mapping args,
 // see if we have the requested forum.
 
  if(forum){
-  // we have the requested forum.
-  retval+="<h2>" + name + "</h2>\n";
+   // we have the requested forum.
+   if(!args->quiet)
+     retval+="<h2>" + name + "</h2>\n";
 
  }
 
@@ -408,7 +409,8 @@ string tag_forum(string tag_name, mapping args,
       "Subject: <input type=text name=subject value=\"Re: \"><br>";
     }*/
    {
-		   array r=s->query("SELECT subject from articles where id="+id->variables->in_reply_to);
+		   array r=s->query("SELECT subject from articles where id="+
+                           s->quote(id->variables->in_reply_to));
 		   string subject = "Re: ";
 		   if(r && sizeof(r))
 				   	if(!search(r[0]->subject, "Re: "))
@@ -444,8 +446,8 @@ string tag_forum(string tag_name, mapping args,
    int unread=1;
    if(id->cookies->userid && id->cookies->userid!="") {
     array r=s->query("SELECT * FROM read_entries WHERE userid=" +
-id->cookies->userid + " AND forum_id=" + forum + " AND article_id=" +
-row->id + " GROUP BY article_id");
+            s->quote(id->cookies->userid) + " AND forum_id=" + 
+            forum + " AND article_id=" + row->id + " GROUP BY article_id");
 // ERROR(sprintf("%O", r));
     if(sizeof(r)!=0) unread=0;
     }
@@ -464,7 +466,12 @@ row->id + " GROUP BY article_id");
     " forum=" + forum + " />";
    }
   
-  if(sizeof(r)==0) retval+= "Sorry, DiscussIt! was unable to find any posts.";
+  if(sizeof(r)==0) {
+    if(!args->quiet)
+      retval+="Sorry, DiscussIt! was unable to find any posts.";
+    else
+      retval+="<!-- no posts -->";
+  }
   else retval+="</ul>\n";
   retval+="<p>[ <a href=\"" + id->not_query + "?newpost=1&forum=" + forum
    + "\">New Post</a> ] ";
@@ -478,7 +485,7 @@ row->id + " GROUP BY article_id");
   if(id->variables->delete && id->misc->forum_admin_user)
   {  
    int parent=s->query("SELECT parent FROM articles WHERE id=" +
-    id->variables->id)[0]->parent || 0;
+              id->variables->id)[0]->parent || 0;
    s->query("DELETE FROM articles WHERE id=" + id->variables->id);
    s->query("DELETE FROM read_entries WHERE article_id=" +
     id->variables->id);
@@ -596,8 +603,8 @@ else if(id->variables->delete_forum) {
   int unreadposts=numposts;
   if(id->cookies->userid && id->cookies->userid!="") {
    array p=s->query("SELECT *  FROM read_entries "
-    "WHERE userid=" + id->cookies->userid + " AND forum_id=" + row->id + 
-    " GROUP BY article_id ");
+    "WHERE userid=" + s->query(id->cookies->userid) + " AND forum_id=" +
+    row->id + " GROUP BY article_id ");
 // ERROR(sprintf("%O", p));
    if(sizeof(p)>0){
     int readposts=sizeof(p);
@@ -632,10 +639,5 @@ mapping query_tag_callers()
 	"forumsgetauth": tag_forumsgetauth,
 	"forum_admin": tag_forum_admin]); 
   }
-
-
-
-
-
 
 
