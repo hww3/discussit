@@ -5,14 +5,14 @@
 // (c) copyright 1999 Bill Welliver
 //
 
-string cvs_version = "$Id: discussit.pike,v 1.4 1999-12-19 15:55:18 hww3 Exp $";
+string cvs_version = "$Id: discussit.pike,v 1.5 2001-02-08 00:15:27 hww3 Exp $";
 
 #include <module.h>
 #include <process.h>
 inherit "module";
 inherit "roxenlib";
 
-#define SQLCONNECT(X) X=Sql.sql(dbserver, db, dblogin, dbpassword)
+#define SQLCONNECT(X) X=id->conf->sql_connect(dbserver)
 #define ERROR(X) perror("DiscussIt!: " + X + "\n")
 array register_module()
 {
@@ -35,18 +35,6 @@ defvar("dbserver", "localhost", "Database Host",
 	"By using 'localhost' as the value, the same machine that Roxen "
 	"is running on (recommended) will be used.\n");
 
-defvar("dblogin", "", "Database User",
-	TYPE_STRING,
-	"This is the username with which to connect to the above server.\n");
-
-defvar("dbpassword", "", "Database password",
-	TYPE_STRING,
-	"Database user's password.\n");
-
-defvar("db", "discussit", "Database Name",
-	TYPE_STRING,
-	"Database which will store discussion groups.\n");
-
 defvar("autocreate", 0, "Forum auto creation?",
 	TYPE_FLAG,
 	"This flag toggles DiscussIt!'s ability to automatically "
@@ -59,20 +47,17 @@ string|void check_variable(string variable, mixed set_to)
 
 }
 
-string dbserver, dblogin, dbpassword, db;
+string dbserver;
 
 void start()
 {
  dbserver=query("dbserver");
- dblogin=query("dblogin");
- dbpassword=query("dbpassword");
- db=query("db");
  
  mixed err;
 
 // ERROR("Starting up!");
 
- err=catch(SQLCONNECT(object s));
+ err=catch(object s=Sql.sql(query("dbserver")));
  if(err) { 
   ERROR("Unable to connect to db.");
   return;
@@ -125,7 +110,7 @@ string do_post(object id, mixed v){
   return 0;
   }
 
-  if(!id->cookies->userid)
+  if(!id->cookies->userid || id->cookies->userid=="")
    return "<forumsgetauth>";
 
   array u=s->query("SELECT * FROM users WHERE userid=" +
@@ -144,7 +129,7 @@ string do_post(object id, mixed v){
 
 }
 
-int create_forum(string name, string description)
+int create_forum(string name, string description, object id)
 {
 
  mixed err;
@@ -165,7 +150,7 @@ int create_forum(string name, string description)
 
 }
 
-int delete_forum(int forum)
+int delete_forum(int forum, object id)
 {
 
  mixed err;
@@ -244,7 +229,7 @@ string tag_forum_index(string tag_name, mapping args,
    + row->id);
   int numposts=(int)p[0]->posts;
   int unreadposts=(int)numposts;
-  if(id->cookies->userid) {
+  if(id->cookies->userid && id->cookies->userid!="") {
    array p=s->query("SELECT *  FROM read_entries "
     "WHERE userid=" + id->cookies->userid + " AND forum_id=" + row->id + 
     " GROUP BY article_id ");
@@ -285,7 +270,7 @@ string tag_subpost(string tag_name, mapping args,
 
   foreach(r, mapping row){
    int unread=1;
-   if(id->cookies->userid) {
+   if(id->cookies->userid && id->cookies->userid!="") {
     array r=s->query("SELECT * FROM read_entries WHERE userid=" +
 id->cookies->userid + " AND article_id=" +
 row->id + " GROUP BY article_id");
@@ -293,7 +278,8 @@ row->id + " GROUP BY article_id");
     if(sizeof(r)!=0) unread=0;
     }
    retval+="<ul><li>" + (unread?"<b>":"")+"<a href=\"" + id->not_query +
-    "?forum=" + args->forum + "&id=" + row->id + "\">" + row->subject +
+    "?forum=" + args->forum + "&id=" + row->id + "\">" +
+html_encode_string(row->subject) +
     "</a>" + (unread?"</b>":"")+" (" + row->name +
     " <b>on</b> " + row->time + ")\n";
   if(id->misc->forum_admin_user)
@@ -376,7 +362,7 @@ string tag_forum(string tag_name, mapping args,
   else if(id->variables->description)
    description=id->variables->description;
   if(description && args->name)
-   res=create_forum(args->name, description);
+   res=create_forum(args->name, description, id);
   if(res) {
     forum=res;
     name=args->name;
@@ -444,7 +430,7 @@ string tag_forum(string tag_name, mapping args,
 
   foreach(r, mapping row){
    int unread=1;
-   if(id->cookies->userid) {
+   if(id->cookies->userid && id->cookies->userid!="") {
     array r=s->query("SELECT * FROM read_entries WHERE userid=" +
 id->cookies->userid + " AND forum_id=" + forum + " AND article_id=" +
 row->id + " GROUP BY article_id");
@@ -454,7 +440,8 @@ row->id + " GROUP BY article_id");
     
    retval+="<li>" + (unread?"<b>":"") + "<a href=\"" + id->not_query +
 "?forum=" + forum + "&"
-    "id=" + row->id + "\">" + row->subject + "</a>" + (unread?"</b>":"") +
+    "id=" + row->id + "\">" + html_encode_string(row->subject) + "</a>" +
+(unread?"</b>":"") +
    " (" + row->name + " <b>on</b> " + row->time + ")\n";
 
   if(id->misc->forum_admin_user)
@@ -500,12 +487,14 @@ row->id + " GROUP BY article_id");
   if(sizeof(r)==1){
   if(args->no_html) r[0]->text=replace(r[0]->text, ({">","<"}),
 ({"&gt;","&lt;"}));
-  retval+="<b>Subject:</b> " + r[0]->subject + "<br>" 
-    "<b>Posted on:</b> " + r[0]->time + " <b>by</b> " +r[0]->name +
+  retval+="<b>Subject:</b> " + html_encode_string(r[0]->subject) + "<br>" 
+    "<b>Posted on:</b> " + r[0]->time + " <b>by</b> " +
+	html_encode_string(r[0]->name) +
     "<br>\n"
-    "<b>Post:</b><p><autoformat>" + r[0]->text + "</autoformat>"
+    "<b>Post:</b><p><autoformat>" + html_encode_string(r[0]->text) +
+	"</autoformat>"
     "<p>";
-  if(id->cookies->userid)
+  if(id->cookies->userid && id->cookies->userid!="")
    s->query("INSERT INTO read_entries VALUES(" + id->cookies->userid +
     "," + r[0]->id + "," + id->variables->forum + ",NOW())");
   }
@@ -545,7 +534,7 @@ if(id->variables->forum) {
 
 else if(id->variables->create && id->variables->name &&
   id->variables->description) {
- int res=create_forum(id->variables->name, id->variables->description);
+ int res=create_forum(id->variables->name, id->variables->description, id);
  retval+="Forum #" + res + ", " + id->variables->name + " created successfully."
   "<p><a href=\"" + id->not_query + "?" + time() + "\">Continue...</a>"; 
  }
@@ -564,7 +553,7 @@ else if(id->variables->want_to_create) {
 
 else if(id->variables->delete_forum) {
 
- int res=delete_forum(id->variables->delete_forum);
+ int res=delete_forum(id->variables->delete_forum, id);
  retval+="Forum #" + id->variables->delete_forum + " deleted successfully."
   "<p><a href=\"" + id->not_query + "?" + time() + "\">Continue...</a>"; 
 
@@ -593,7 +582,7 @@ else if(id->variables->delete_forum) {
    + row->id);
   int numposts=(int)p[0]->posts;
   int unreadposts=numposts;
-  if(id->cookies->userid) {
+  if(id->cookies->userid && id->cookies->userid!="") {
    array p=s->query("SELECT *  FROM read_entries "
     "WHERE userid=" + id->cookies->userid + " AND forum_id=" + row->id + 
     " GROUP BY article_id ");
