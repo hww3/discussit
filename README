@@ -1,6 +1,6 @@
-[DiscussIt! version 0.97]
+[DiscussIt! version 1.0]
 
-DiscussIt! is a free module for the Roxen Web Server. It allows easy
+DiscussIt! is a free module for the Caudium Web Server. It allows easy
 creation of discussion groups without the need to program custom CGI
 scripts.
 
@@ -11,10 +11,17 @@ developer at hww3@riverweb.com.
 If you find this module useful, I'd greatly appreciate a postcard from you
 letting me know you're out there. My Address is:
   Bill Welliver
-  RR 1 Box 44
-  Wapwallopen, PA 18660
+  50 Yocum Road
+  Wapwallopen, PA 18660 USA
 
 [What's New]
+
+Version 1.0:	
+	DiscussIt! 1.0 is now only compatible with Caudium 1.3/4.
+	Utilizes the new Caudium user database system, eliminating the
+	  need for an external user table.
+	Anonymous posts are allowed.
+	<forum_link> added for creating custom lists of forums.
 
 Version 0.97:	
 	DiscussIt! now quotes any input from the tag or user in order to 
@@ -35,12 +42,12 @@ Version 0.9:
 
 [Requirements]
 
-   * Caudium 1.0, Roxen 1.3 or higher.
+   * Caudium 1.3 or higher.
    * RDBMS supported by Roxen (mySQL is known to work, others may also)
 
 [Getting DiscussIt!]
 
-   * Download the latest version of DiscussIt! with Documentation (v0.95)
+   * Download the latest version of DiscussIt! with Documentation (v1.0)
 	from http://www.riverweb.com/modules/dist/
 
 [Installing DiscussIt!]
@@ -63,11 +70,11 @@ need to tell DiscussIt! about the database you want to use for storing the
 discussion groups. This database should already exist. DiscussIt! will
 create the tables it needs when it is loaded the first time.
 
-You must specify your database using a Roxen SQL URL, like this:
+You must specify your database using a SQL URL, like this:
 
   mysql://user:password@host/databasename
 
-The tables that DiscussIt! creates are: forum_names, users, read_entries
+The tables that DiscussIt! creates are: forum_names, read_entries
 and articles. These tables should not already be in use by another
 application. If they are, DiscussIt! may not be able to find the proper
 fields in order to operate.
@@ -125,30 +132,36 @@ The forum tag takes the following attributes:
   no_html		Replaces all < and > with &lt; and &gt;.
   nofollowups		Don't show followup discussion with posts.
 
+[Creating a Custom Index]
+
+DiscussIt! does not currently support "nested" forums; that is, forums 
+that are grouped together and displayed separately from those in other 
+groups. However, you can create pages that contain links to one or more 
+forums thereby simulating a "group of forums". To do this, you can use the 
+<forum_link> tag. Basically, this tag takes two inputs: the id of the 
+forum you wish to create a link for and b) a URL or relative path to a 
+page that contains a <forum> tag.
+
+Example:
+
+  <forum_link id="5" href="forumview.html">
+
+might generate the following:
+
+  <a href="forumview.html?forumid=5">Forum Name</a> (5 posts, 2 unread)
+
+depending on the actual identity of forum ID 5.
+
 [Autocreate]
 If you have enabled the "autocreate" function in the module's
 configuration, DiscussIt! will try to create new forums when provided with
 a forum tag with a name attribute that doesn't already exist.
 
 [Posting Access]
-Access to adding new posts is controlled by the "users" table. In order to
-post, a user will be prompted for a username and password. This
-information will then be matched against data in the "users" table. To
-grant access to a user, simply add a record to this table with a password.
-The password is stored in clear text at this time.
-
-Example using (My)SQL: 
-
-  INSERT INTO users VALUES(NULL, 'user','mypasswd','Joe User', 
-    'myself@me.com',NOW());
-
-DiscussIt! determines whether a user is logged in by the presence of the
-"userid" cookie. The cookie contains the numeric userid of the currently
-logged in user. You may set this cookie ahead of time to eliminate the
-need to log in when using DiscussIt!, or you may use this information to
-create an "anonymous user" that allows posting without logging in. To do
-this, simply create an entry in the users table for the anonymous user,
-then set the userid cookie with the numeric userid of that user.
+Access to adding new posts is controlled by Caudium's user database and 
+authentication system. In order to post, a user must be authenticated. 
+This can be done using .htaccess, or any of a number of other methods, 
+including RXML.
 
 [Acknowledgments]
 
@@ -156,4 +169,4 @@ Thanks to Xavier Beaudouin <kiwi@oav.net> for his assistance in adding
 new features to DiscussIt!.
 
 Bill Welliver <hww3@riverweb.com>
-2/18/2002
+3/10/2004

@@ -1,11 +1,11 @@
 //
-// This is a Roxen module.
+// This is a Caudium module.
 //
 // Written by Bill Welliver, <hww3@riverweb.com>
-// (c) copyright 1999 Bill Welliver
+// (c) copyright 2004 Bill Welliver
 //
 
-string cvs_version = "$Id: discussit.pike,v 1.7 2002-02-19 03:47:27 hww3 Exp $";
+string cvs_version = "$Id: discussit.pike,v 1.8 2004-03-11 20:22:16 hww3 Exp $";
 
 #include <module.h>
 #include <process.h>
@@ -26,6 +26,7 @@ array register_module()
             "Database driven discussion groups.<p>\n"
 	"Usage:<p>"
 	"&lt;forum&gt; "
+	"&lt;forum_link&gt; "
 	"&lt;forum_admin&gt; "
 		, ({}), 1
             });
@@ -45,6 +46,11 @@ defvar("autocreate", 0, "Forum auto creation?",
 	"This flag toggles DiscussIt!'s ability to automatically "
 	"create new forums.\n");
 
+defvar("allow_anonymous", 0, "Allow anonymous posters?",
+	TYPE_FLAG,
+	"This flag toggles DiscussIt!'s ability to allow anonymous "
+	"users to post to forums.\n");
+
 }
 
 string|void check_variable(string variable, mixed set_to)
@@ -56,6 +62,8 @@ string dbserver;
 
 void start()
 {
+
+ module_dependencies(my_configuration(), ({"123sessions"}));
  if(catch(dbserver=query("dbserver"))) return;
  mixed err;
 // ERROR("Starting up!");
@@ -63,7 +71,7 @@ void start()
 #if ROXEN_MAJOR_VERSION.ROXEN_MINOR_VERSION > 2.1
  err=catch(object s=DBManager.get(dbserver,my_configuration()));
 #else
- err=catch(object s=Sql.sql(dbserver));
+ err=catch(object s=my_configuration()->sql_connect(dbserver));
 #endif
  if(err) { 
   ERROR("Unable to connect to db.");
@@ -78,22 +86,13 @@ void start()
    "forum_description blob,"
    "stamp datetime) ");
 
- if(sizeof(s->list_tables("users"))!=1)
-  s->query("CREATE TABLE users ( "
-   "userid INTEGER AUTO_INCREMENT PRIMARY KEY, "
-   "username char(16), "
-   "password char(16), "
-   "real_name char(64), "
-   "email char(96),"
-   "stamp datetime) ");
-
  if(sizeof(s->list_tables("read_entries"))!=1)
   s->query("CREATE TABLE read_entries ( "
-   "userid INTEGER NOT NULL, "
+   "username char(12) NOT NULL, "
    "article_id INTEGER NOT NULL, "
    "forum_id INTEGER, "
    "stamp datetime,"
-   "KEY user_article (userid, article_id)) ");
+   "KEY user_article (username, article_id)) ");
 
  if(sizeof(s->list_tables("articles"))!=1)
   s->query("CREATE TABLE articles ( "
@@ -101,7 +100,7 @@ void start()
   "forum integer not null, "
   "parent integer default 0, "
   "subject char(255), "
-  "userid INTEGER, "
+  "username char(12), "
   "text blob, "
   "stats integer, "
   "stamp datetime) ");
@@ -111,6 +110,7 @@ void start()
 string do_post(object id, mixed v){
 
  mixed err;
+ mapping u;
 
  err=catch(SQLCONNECT(object s));
  if(err) { 
@@ -118,18 +118,22 @@ string do_post(object id, mixed v){
   return 0;
   }
 
-  if(!id->cookies->userid || id->cookies->userid=="")
-   return "<forumsgetauth />";
+  u = id->get_user();  
 
-  array u=s->query("SELECT * FROM users WHERE userid=" +
-          s->quote(id->cookies->userid));
-  if(sizeof(u)!=1)
-   return "Unable to find your user id.";
+  if(!u && !QUERY(allow_anonymous))
+   return "You must be logged in to post.";
+
+  else if(!u)
+  {
+    u->username = "anonymous";
+    u->name = "Anonymous";
+  }
+
   array r=s->query("SELECT * FROM forum_names WHERE id=" + s->quote(v->forum));
 
   s->query("INSERT INTO articles VALUES(NULL, " + r[0]->id + "," +
-    (v->in_reply_to ||"0") + ",'" + s->quote(v->subject) + "'," +
-    u[0]->userid + ",'" + s->quote(v->post) + "',0,NOW())"); 
+    (v->in_reply_to ||"0") + ",'" + s->quote(v->subject) + "','" +
+    u->username + "','" + s->quote(v->post) + "',0,NOW())"); 
 
   return "Your post was added successfully.<p>"
      "<a href=\"" + id->not_query + "?forum=" + id->variables->forum + "&"
@@ -177,44 +181,49 @@ return 1;
 
 }
 
-string tag_forumsgetauth(string tag_name, mapping args,
+string tag_forum_link(string tag_name, mapping args,
 	object id, mapping defines)
 {
 
-string retval="";
-
+ string retval="";
  mixed err;
+
+ if(!args->forumid) return "No Forum ID specified.\n";
 
  err=catch(SQLCONNECT(object s));
  if(err) { 
-  ERROR("Unable to connect to database while doing create_forum().");
+  ERROR("Unable to connect to database while doing tag_forum_index().");
   return "An error occurred while connecting to the DiscussIt! database.";
   }
 
-if(id->variables->username && id->variables->password) {
- array r=s->query("SELECT * FROM users WHERE username='" +
-  s->quote(id->variables->username) + "' AND password='" + 
-  s->quote(id->variables->password) + "'");
- if(sizeof(r)==1)
-#if ROXEN_MAJOR_VERSION.ROXEN_MINOR_VERSION > 1.3
-  retval+="<set scope=\"cookie\" variable=\"userid\" value=\"" + r[0]->userid + "\" />"
-#else
-  retval+="<set_cookie name=userid value=\"" + r[0]->userid + "\">"
-#endif
-   "<h3>Login Successful!</h3>\n"
-   "<a href=\"" + id->not_query + "?" + id->query + "&" + time() +
-   "\">Continue...</a>";
-  else retval+="<h3>Login Incorrect</h3>\n<a href=\"" + id->not_query +
-   "?" + id->query + "\">Try again.</a>";
-  }
- else 
- retval+="<form method=post action=\"" + id->not_query + "?" + id->query + "\">\n"
-  "<h3>Login</h3>\nUsername <input type=text name=username><br>"
-  "Password <input type=password name=password><p>\n"
-  "<input type=submit value=\"Login\"></form>";
+ array d=s->query("SELECT * FROM forum_names WHERE id = %d", 
+    (int)(args->forumid));
 
+ foreach(d, mapping row){
+  array p=s->query("SELECT COUNT(*) as posts FROM articles WHERE forum=" 
+   + row->id);
+  int numposts=(int)p[0]->posts;
+  int unreadposts=(int)numposts;
 
-return retval;
+  mapping u = id->get_user();
+  if(u) {
+   array p=s->query("SELECT *  FROM read_entries "
+    "WHERE username='" + u->username + "' AND forum_id=" +
+     row->id + " GROUP BY article_id ");
+
+   if(sizeof(p)>0){
+    int readposts=sizeof(p);
+    unreadposts-=((int)readposts);
+    }
+   }
+   retval+="<li><a href=\"" + (args->href||id->not_query) + "?forum=" + 
+   row->id + "\">" + row->forum_name + "</a> ( <i>" + numposts + " posts, " +
+   unreadposts + " unread</i> )\n";
+
+ }
+
+ return retval;
+
 }
 
 string tag_forum_index(string tag_name, mapping args,
@@ -241,9 +250,12 @@ string tag_forum_index(string tag_name, mapping args,
    + row->id);
   int numposts=(int)p[0]->posts;
   int unreadposts=(int)numposts;
-  if(id->cookies->userid && id->cookies->userid!="") {
+
+  mapping u = id->get_user();
+  werror("user: %O\n", u); 
+  if(u) {
    array p=s->query("SELECT *  FROM read_entries "
-    "WHERE userid=" + s->quote(id->cookies->userid) + " AND forum_id=" +
+    "WHERE username='" + u->username + "' AND forum_id=" +
      row->id + " GROUP BY article_id ");
 
    if(sizeof(p)>0){
@@ -276,23 +288,31 @@ string tag_subpost(string tag_name, mapping args,
 
   array r=s->query("SELECT articles.*, DATE_FORMAT(" +
    "articles.stamp, "
-   "'%e %M %Y') AS time, users.real_name AS name FROM articles "
-   ",users WHERE parent=" + s->quote(args->parent) + " AND users.userid=" + 
-   "articles.userid");
+   "'%e %M %Y') AS time FROM articles "
+   "WHERE parent=" + s->quote(args->parent) + " ORDER by stamp " + 
+     (id->misc->session_variables->sortorder || ""));
+
+  mapping u = id->get_user();
 
   foreach(r, mapping row){
    int unread=1;
-   if(id->cookies->userid && id->cookies->userid!="") {
-    array r=s->query("SELECT * FROM read_entries WHERE userid=" +
-            s->quote(id->cookies->userid) + " AND article_id=" +
+  
+   if(u) {
+    array r=s->query("SELECT * FROM read_entries WHERE username='" +
+            u->username + "' AND article_id=" +
             row->id + " GROUP BY article_id");
-// ERROR(sprintf("%O", r));
     if(sizeof(r)!=0) unread=0;
     }
+
+   string n;
+
+   if(row->username) n = id->conf->auth_module->user_info(row->username)->name;
+   else n = "Unknown User";
+
    retval+="<ul><li>" + (unread?"<b>":"")+"<a href=\"" + id->not_query +
     "?forum=" + args->forum + "&id=" + row->id + "\">" +
-html_encode_string(row->subject) +
-    "</a>" + (unread?"</b>":"")+" (" + row->name +
+    html_encode_string(row->subject) +
+    "</a>" + (unread?"</b>":"") + " (" + n +
     " <b>on</b> " + row->time + ")\n";
   if(id->misc->forum_admin_user)
     retval+=" &nbsp; <a href=\"" + id->not_query + "?forum=" + args->forum
@@ -315,6 +335,14 @@ string tag_forum(string tag_name, mapping args,
  string name;
  int forum;
  mixed err;
+
+ mapping u = id->get_user();
+
+ if(!id->misc->session_variables->sortorder)
+  id->misc->session_variables->sortorder = "asc";
+
+ if(id->variables->sortorder)
+   id->misc->session_variables->sortorder = id->variables->sortorder;
 
 // connect to the forums database.
 
@@ -403,11 +431,6 @@ string tag_forum(string tag_name, mapping args,
      "<input type=hidden name=dopost value=\"1\">\n";
 
    if(id->variables->in_reply_to)
-    /*{
-     retval+="<input type=hidden name=in_reply_to value=\""
-       + id->variables->in_reply_to + "\">\n"
-      "Subject: <input type=text name=subject value=\"Re: \"><br>";
-    }*/
    {
 		   array r=s->query("SELECT subject from articles where id="+
                            s->quote(id->variables->in_reply_to));
@@ -436,27 +459,30 @@ string tag_forum(string tag_name, mapping args,
 
   array r=s->query("SELECT articles.*, DATE_FORMAT(" 
    "articles.stamp, "
-   "'%e %M %Y') AS time, users.real_name as name from articles " 
-   ",users WHERE users.userid=articles.userid AND forum=" + 
-   forum + " AND parent=0");
+   "'%e %M %Y') AS time from articles " 
+   "WHERE  forum=" + forum + " AND parent=0 ORDER BY stamp " + 
+(id->misc->session_variables->sortorder||""));
 
   if(sizeof(r)>0) retval+="<ul>\n";
 
   foreach(r, mapping row){
    int unread=1;
-   if(id->cookies->userid && id->cookies->userid!="") {
-    array r=s->query("SELECT * FROM read_entries WHERE userid=" +
-            s->quote(id->cookies->userid) + " AND forum_id=" + 
+   if(u) {
+    array r=s->query("SELECT * FROM read_entries WHERE username='" +
+            u->username + "' AND forum_id=" + 
             forum + " AND article_id=" + row->id + " GROUP BY article_id");
-// ERROR(sprintf("%O", r));
     if(sizeof(r)!=0) unread=0;
     }
     
+
+   string n;
+   if(row->username) n = id->conf->auth_module->user_info(row->username)->name;
+   else n = "Unknown User";
+
    retval+="<li>" + (unread?"<b>":"") + "<a href=\"" + id->not_query +
-"?forum=" + forum + "&"
-    "id=" + row->id + "\">" + html_encode_string(row->subject) + "</a>" +
-(unread?"</b>":"") +
-   " (" + row->name + " <b>on</b> " + row->time + ")\n";
+    "?forum=" + forum + "&id=" + row->id + "\">" + 
+    html_encode_string(row->subject) + "</a>" +
+    (unread?"</b>":"") + " (" + n + " <b>on</b> " + row->time + ")\n";
 
   if(id->misc->forum_admin_user)
     retval+=" &nbsp; <a href=\"" + id->not_query + "?forum=" + forum
@@ -475,6 +501,13 @@ string tag_forum(string tag_name, mapping args,
   else retval+="</ul>\n";
   retval+="<p>[ <a href=\"" + id->not_query + "?newpost=1&forum=" + forum
    + "\">New Post</a> ] ";
+  if(id->misc->session_variables->sortorder == "desc")
+    retval+=" &nbsp; [ <a href=\"" + id->not_query + "?forum=" + forum + 
+       "&sortorder=asc\">Sort by Oldest</a> ] ";
+  else
+    retval+=" &nbsp; [ <a href=\"" + id->not_query + "?forum=" + forum + 
+       "&sortorder=desc\">Sort by Newest</a> ] ";
+
   if(!args->noindex)
    retval+="&nbsp; [ <a href=\"" + id->not_query + "?" + time() +
      "\">Index of Forums</a> ] ";
@@ -499,23 +532,25 @@ string tag_forum(string tag_name, mapping args,
  // return the post requested.
   array r=s->query("SELECT articles.*, DATE_FORMAT(" +
    "articles.stamp, "
-   "'%e %M %Y') AS time, users.real_name as name from articles " 
-   ",users WHERE users.userid=articles.userid AND id=" +
-   id->variables->id);
+   "'%e %M %Y') AS time from articles " 
+   "WHERE id=" + id->variables->id);
 
   if(sizeof(r)==1){
-  if(args->no_html) r[0]->text=replace(r[0]->text, ({">","<"}),
-({"&gt;","&lt;"}));
-  retval+="<b>Subject:</b> " + html_encode_string(r[0]->subject) + "<br>" 
-    "<b>Posted on:</b> " + r[0]->time + " <b>by</b> " +
-	html_encode_string(r[0]->name) +
-    "<br>\n"
-    "<b>Post:</b><p><autoformat>" + html_encode_string(r[0]->text) +
-	"</autoformat>"
-    "<p>";
-  if(id->cookies->userid && id->cookies->userid!="")
-   s->query("INSERT INTO read_entries VALUES(" + id->cookies->userid +
-    "," + r[0]->id + "," + id->variables->forum + ",NOW())");
+
+   string n;
+   if(r[0]->username) n = id->conf->auth_module->user_info(r[0]->username)->name;
+   else n = "Unknown User";
+
+    if(args->no_html) r[0]->text=replace(r[0]->text, ({">","<"}),
+      ({"&gt;","&lt;"}));
+    retval+="<b>Subject:</b> " + html_encode_string(r[0]->subject) + 
+      "<br><b>Posted on:</b> " + r[0]->time + " <b>by</b> " +	
+      html_encode_string(n) + "<br>\n"
+      "<b>Post:</b><p><autoformat>" + html_encode_string(r[0]->text) +
+      "</autoformat><p>";
+  if(u)
+   s->query("INSERT INTO read_entries VALUES('" + u->username +
+    "'," + r[0]->id + "," + id->variables->forum + ",NOW())");
   }
 
   retval+="[ <a href=\"" + id->not_query + "?newpost=1&forum=" + forum + 
@@ -526,8 +561,14 @@ string tag_forum(string tag_name, mapping args,
   retval+=" &nbsp; [ Next Post ] ";
   retval+=" &nbsp; [ Previous in Thread ] ";
   retval+=" &nbsp; [ Next in Thread ] ";
-  retval+=" &nbsp; [ <a href=\"" + id->not_query + "?forum=" +
-   forum + "&" + time() + "\">Forum Index</a> ] ";
+  if(id->misc->session_variables->sortorder == "desc")
+    retval+=" &nbsp; [ <a href=\"" + id->not_query + "?forum=" + forum + 
+       "&sortorder=asc\">Sort by Oldest</a> ] ";
+  else
+    retval+=" &nbsp; [ <a href=\"" + id->not_query + "?forum=" + forum + 
+       "&sortorder=desc\">Sort by Newest</a> ] ";
+
+  retval+=" &nbsp; [ <a href=\"" + id->not_query + "?forum=" + forum + "\">This Forum</a> ]\n";
 
   if(!args->nofollowups)
    retval+="<h4>Follow Up:</h4>\n<subpost forum=" + forum + " parent=" +
@@ -542,6 +583,8 @@ string tag_forum_admin(string tag_name, mapping args,
 {
 
 string retval="";
+
+mapping u = id->get_user();
 
 id->misc->forum_admin_user=1;
 
@@ -601,11 +644,10 @@ else if(id->variables->delete_forum) {
    + row->id);
   int numposts=(int)p[0]->posts;
   int unreadposts=numposts;
-  if(id->cookies->userid && id->cookies->userid!="") {
+  if(u) {
    array p=s->query("SELECT *  FROM read_entries "
-    "WHERE userid=" + s->query(id->cookies->userid) + " AND forum_id=" +
+    "WHERE username='" + u->username + "' AND forum_id=" +
     row->id + " GROUP BY article_id ");
-// ERROR(sprintf("%O", p));
    if(sizeof(p)>0){
     int readposts=sizeof(p);
     unreadposts-=((int)readposts);
@@ -635,8 +677,8 @@ mapping query_tag_callers()
 {
   return (["forum_index": tag_forum_index,
 	"forum": tag_forum,
+	"forum_link": tag_forum_link,
 	"subpost": tag_subpost,
-	"forumsgetauth": tag_forumsgetauth,
 	"forum_admin": tag_forum_admin]); 
   }
 
