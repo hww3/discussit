@@ -1,0 +1,243 @@
+*** discussit-0.9/discussit.pike	Fri May  7 04:41:17 1999
+--- discussit-0.9-pgsql/discussit.pike	Thu Jun  3 00:48:00 1999
+***************
+*** 70,75 ****
+--- 70,80 ----
+   
+   mixed err;
+  
++  // How does the DB define auto incremented intergers?
++  string auto_inc_int = "integer auto_increment"; 
++  // How does the DB define text "blobs"
++  string blob = "blob";
++ 
+  // ERROR("Starting up!");
+  
+   err=catch(SQLCONNECT(object s));
+***************
+*** 78,118 ****
+    return;
+    }
+  
+!  if(sizeof(s->list_tables("forum_names"))!=1)
+    s->query("CREATE TABLE forum_names ( "
+!    "id INTEGER AUTO_INCREMENT PRIMARY KEY, "
+     "forum_name char(64), "
+!    "forum_description blob,"
+     "stamp datetime) ");
+  
+!  if(sizeof(s->list_tables("users"))!=1)
+    s->query("CREATE TABLE users ( "
+!    "userid INTEGER AUTO_INCREMENT PRIMARY KEY, "
+     "username char(16), "
+     "password char(16), "
+     "real_name char(64), "
+     "email char(96),"
+     "stamp datetime) ");
+  
+!  if(sizeof(s->list_tables("read_entries"))!=1)
+    s->query("CREATE TABLE read_entries ( "
+     "userid INTEGER NOT NULL, "
+     "article_id INTEGER NOT NULL, "
+     "forum_id INTEGER, "
+!    "stamp datetime,"
+!    "KEY user_article (userid, article_id)) ");
+! 
+!  if(sizeof(s->list_tables("articles"))!=1)
+    s->query("CREATE TABLE articles ( "
+!   "id integer auto_increment primary key, "
+    "forum integer not null, "
+    "parent integer default 0, "
+    "subject char(255), "
+    "userid INTEGER, "
+!   "text blob, "
+    "stats integer, "
+    "stamp datetime) ");
+  
+  }
+  
+  string do_post(object id, mixed v){
+--- 83,135 ----
+    return;
+    }
+  
+!  // Postgres needs these a bit different
+!  if(s->server_info() == "Postgres/unknown" ) {
+!   string auto_inc_int = "serial"; 
+!   string blob = "text";
+!   }
+! 
+!  s->query("BEGIN TRANSACTION");
+! 
+!  // Postgres reports value > 1 here
+!  if(sizeof(s->list_tables("forum_names")) == 0)
+    s->query("CREATE TABLE forum_names ( "
+!    "id " + auto_inc_int + " PRIMARY KEY, "
+     "forum_name char(64), "
+!    "forum_description " + blob +","
+     "stamp datetime) ");
+  
+!  if(sizeof(s->list_tables("users")) == 0)
+    s->query("CREATE TABLE users ( "
+!    "userid " + auto_inc_int + " PRIMARY KEY, "
+     "username char(16), "
+     "password char(16), "
+     "real_name char(64), "
+     "email char(96),"
+     "stamp datetime) ");
+  
+!  if(sizeof(s->list_tables("read_entries")) == 0)
+    s->query("CREATE TABLE read_entries ( "
+     "userid INTEGER NOT NULL, "
+     "article_id INTEGER NOT NULL, "
+     "forum_id INTEGER, "
+!    "stamp datetime ) ");
+! // NON Postgres compliant SQL code:
+! //   "stamp datetime,"
+! //   "KEY user_article (userid, article_id)) "); 
+!    
+!  if(sizeof(s->list_tables("articles")) == 0)
+    s->query("CREATE TABLE articles ( "
+!   "id " + auto_inc_int + " PRIMARY KEY, "
+    "forum integer not null, "
+    "parent integer default 0, "
+    "subject char(255), "
+    "userid INTEGER, "
+!   "text " + blob + ", "
+    "stats integer, "
+    "stamp datetime) ");
+  
++  s->query("END TRANSACTION");
+  }
+  
+  string do_post(object id, mixed v){
+***************
+*** 134,140 ****
+     return "Unable to find your user id.";
+    array r=s->query("SELECT * FROM forum_names WHERE id=" + v->forum);
+  
+!   s->query("INSERT INTO articles VALUES(NULL, " + r[0]->id + "," +
+      (v->in_reply_to ||"0") + ",'" + s->quote(v->subject) + "'," +
+      u[0]->userid + ",'" + s->quote(v->post) + "',0,NOW())"); 
+  
+--- 151,159 ----
+     return "Unable to find your user id.";
+    array r=s->query("SELECT * FROM forum_names WHERE id=" + v->forum);
+  
+!   s->query("INSERT INTO articles " +
+!     "(forum, parent, subject, userid, text, stats, stamp ) " +
+!     "VALUES( " + r[0]->id + "," +
+      (v->in_reply_to ||"0") + ",'" + s->quote(v->subject) + "'," +
+      u[0]->userid + ",'" + s->quote(v->post) + "',0,NOW())"); 
+  
+***************
+*** 157,163 ****
+  
+   string table=replace(lower_case(name)," ","_");
+  
+!  s->query("INSERT INTO forum_names VALUES(NULL, '" + s->quote(name) +
+    "','" + s->quote(description) + "',NOW())");
+  
+   return s->query("SELECT id FROM forum_names WHERE forum_name='" +
+--- 176,184 ----
+  
+   string table=replace(lower_case(name)," ","_");
+  
+!  s->query("INSERT INTO forum_names " +
+!   "( forum_name, forum_description, stamp ) " +
+!   "VALUES( '" + s->quote(name) +
+    "','" + s->quote(description) + "',NOW())");
+  
+   return s->query("SELECT id FROM forum_names WHERE forum_name='" +
+***************
+*** 275,283 ****
+    return "Unable to connect to database.";
+    }
+  
+!   array r=s->query("SELECT articles.*, DATE_FORMAT(" +
+!    "articles.stamp, "
+!    "'%e %M %Y') AS time, users.real_name AS name FROM articles "
+     ",users WHERE parent=" + args->parent + " AND users.userid=" + 
+     "articles.userid");
+  
+--- 296,304 ----
+    return "Unable to connect to database.";
+    }
+  
+!   // The DATE_FORMAT function is not present in Postgres
+!   array r=s->query("SELECT articles.*, DATE(articles.stamp) "
+!    "AS time, users.real_name AS name FROM articles "
+     ",users WHERE parent=" + args->parent + " AND users.userid=" + 
+     "articles.userid");
+  
+***************
+*** 420,428 ****
+   else if(!(id->variables->id)) {
+    // we don't have a particular post in mind, so show them all.
+  
+!   array r=s->query("SELECT articles.*, DATE_FORMAT(" 
+!    "articles.stamp, "
+!    "'%e %M %Y') AS time, users.real_name as name from articles " 
+     ",users WHERE users.userid=articles.userid AND forum=" + 
+     forum + " AND parent=0");
+  
+--- 441,448 ----
+   else if(!(id->variables->id)) {
+    // we don't have a particular post in mind, so show them all.
+  
+!   array r=s->query("SELECT articles.*, DATE(articles.stamp) "
+!    "AS time, users.real_name as name from articles " 
+     ",users WHERE users.userid=articles.userid AND forum=" + 
+     forum + " AND parent=0");
+  
+***************
+*** 477,485 ****
+    }
+    else {
+   // return the post requested.
+!   array r=s->query("SELECT articles.*, DATE_FORMAT(" +
+!    "articles.stamp, "
+!    "'%e %M %Y') AS time, users.real_name as name from articles " 
+     ",users WHERE users.userid=articles.userid AND id=" +
+     id->variables->id);
+  
+--- 497,504 ----
+    }
+    else {
+   // return the post requested.
+!   array r=s->query("SELECT articles.*, DATE(articles.stamp) "
+!    "AS time, users.real_name as name from articles " 
+     ",users WHERE users.userid=articles.userid AND id=" +
+     id->variables->id);
+  
+***************
+*** 491,499 ****
+      "<br>\n"
+      "<b>Post:</b><p><autoformat>" + r[0]->text + "</autoformat>"
+      "<p>";
+!   if(id->cookies->userid)
+!    s->query("INSERT INTO read_entries VALUES(" + id->cookies->userid +
+!     "," + r[0]->id + "," + id->variables->forum + ",NOW())");
+    }
+  
+    retval+="[ <a href=\"" + id->not_query + "?newpost=1&forum=" + forum + 
+--- 510,528 ----
+      "<br>\n"
+      "<b>Post:</b><p><autoformat>" + r[0]->text + "</autoformat>"
+      "<p>";
+!   if(id->cookies->userid) {
+!    // If user has read article, only update stamp
+!    s->query("BEGIN TRANSACTION");
+!    array re=s->query("SELECT stamp FROM read_entries WHERE userid=" +
+!     id->cookies->userid + " AND article_id=" + r[0]->id);
+!    if(sizeof(re)>0)
+!     s->query("UPDATE read_entries SET stamp=NOW() WHERE userid=" +
+!      id->cookies->userid + " AND article_id=" + r[0]->id);
+!    else
+!     s->query("INSERT INTO read_entries VALUES(" + id->cookies->userid +
+!      "," + r[0]->id + "," + id->variables->forum + ",NOW())");
+!    s->query("END TRANSACTION");
+!   }
+    }
+  
+    retval+="[ <a href=\"" + id->not_query + "?newpost=1&forum=" + forum + 
