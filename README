@@ -39,13 +39,25 @@ using the following command:
 
 You should get a directory called discussit-1.0. Inside that directory is
 a file called discussit.pike. Copy that file to your Roxen modules
-directory, under roxen/server/modules. Then you can use the Configuration
-Interface to add the DiscussIt! module.
+directory, under roxen/server/modules, or another directory that has been 
+added to your module search path. Then you can use the Configuration
+Interface to add the DiscussIt! module. You may need to flush your module
+cache n order to see the new module depending on how Roxen is installed on
+the system in question.
 
 There are a few options you can change, but in most cases, you will only
 need to tell DiscussIt! about the database you want to use for storing the
 discussion groups. This database should already exist. DiscussIt! will
 create the tables it needs when it is loaded the first time.
+
+You must specify your database using a Roxen SQL URL, like this:
+
+  mysql://user:password@host/databasename
+
+The tables that DiscussIt! creates are: forum_names, users, read_entries
+and articles. These tables should not already be in use by another
+application. If they are, DiscussIt! may not be able to find the proper
+fields in order to operate.
 
 That's all there is to it! You can now start using the features of the
 DiscussIt! module.
@@ -110,4 +122,4 @@ Example using SQL:
 [Acknowledgments]
 
 Bill Welliver <hww3@riverweb.com>
-5/4/99
+12/20/99

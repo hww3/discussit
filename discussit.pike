@@ -5,7 +5,7 @@
 // (c) copyright 1999 Bill Welliver
 //
 
-string cvs_version = "$Id: discussit.pike,v 1.3 1999-05-09 15:32:09 hww3 Exp $";
+string cvs_version = "$Id: discussit.pike,v 1.4 1999-12-19 15:55:18 hww3 Exp $";
 
 #include <module.h>
 #include <process.h>
@@ -207,6 +207,8 @@ if(id->variables->username && id->variables->password) {
    "<h3>Login Successful!</h3>\n"
    "<a href=\"" + id->not_query + "?" + id->query + "&" + time() +
    "\">Continue...</a>";
+  else retval+="<h3>Login Incorrect</h3>\n<a href=\"" + id->not_query +
+   "?" + id->query + "\">Try again.</a>";
   }
  else 
  retval+="<form method=post action=\"" + id->not_query + "?" + id->query + "\">\n"
@@ -512,7 +514,10 @@ row->id + " GROUP BY article_id");
    "\">New Post</a> ] " ;
   retval+=" &nbsp; [ <a href=\"" + id->not_query + "?newpost=1&forum=" +
    forum + "&in_reply_to=" + r[0]->id + "\">Post Reply</a> ] ";
-
+  retval+=" &nbsp; [ Previous Post ] ";
+  retval+=" &nbsp; [ Next Post ] ";
+  retval+=" &nbsp; [ Previous in Thread ] ";
+  retval+=" &nbsp; [ Next in Thread ] ";
   retval+=" &nbsp; [ <a href=\"" + id->not_query + "?forum=" +
    forum + "&" + time() + "\">Forum Index</a> ] ";
 
